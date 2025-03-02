@@ -11,7 +11,6 @@ export async function activate(context: vscode.ExtensionContext) {
         const document = editor.document;
         const position = editor.selection.active;
 
-        // 確保光標在 "new XXX" 附近
         const lineText = document.lineAt(position.line).text;
         const match = lineText.match(/new\s+(\w+)/);
         if (!match) {
@@ -87,4 +86,4 @@ function generateInitializerCode(members: string[]): string {
     return `\n${memberInits}\n        }`;
 }
 
-export function deactivate() {}
+export function deactivate() {} 
