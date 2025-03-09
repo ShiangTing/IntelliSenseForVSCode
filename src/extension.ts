@@ -70,10 +70,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
             const initCode = generateInitializerCode(members);
 
+            // 找到下一行的縮排
+            const nextLine = document.lineAt(position.line + 1);
+            const indentation = nextLine.text.match(/^\s*/)?.[0] || '';
+
             editor.edit(editBuilder => {
-                if (!lineText.trim().endsWith('{')) {
-                    editBuilder.insert(new vscode.Position(position.line, lineText.length), ' {');
-                }
                 editBuilder.insert(new vscode.Position(position.line + 1, 0), initCode);
             });
 
@@ -119,9 +120,8 @@ class InitializeMembersActionProvider implements vscode.CodeActionProvider {
     }
 }
 
-function generateInitializerCode(members: string[]): string {
-    const memberInits = members.map(m => `            ${m} = `).join(',\n');
-    return `\n${memberInits}\n        }`;
+export function generateInitializerCode(members: string[]): string {
+    return members.map(m => `            ${m} = `).join(',\n');
 }
 
 export function deactivate() {} 
