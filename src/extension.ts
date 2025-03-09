@@ -2,6 +2,7 @@ import { Console } from 'console';
 import * as vscode from 'vscode';
 
 export async function activate(context: vscode.ExtensionContext) {
+    // 註冊命令
     let disposable = vscode.commands.registerCommand('csharp-member-initializer.initializeMembers', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {
@@ -9,45 +10,64 @@ export async function activate(context: vscode.ExtensionContext) {
         }
 
         const document = editor.document;
-        const position = editor.selection.active;
+        const position = editor.selection.active;   
 
         const lineText = document.lineAt(position.line).text;
-        const match = lineText.match(/new\s+(\w+)/);
+        // 修改 match 規則，使其匹配 new XXX(){, new XXX() {, new XXX () { 等格式
+        const match = lineText.match(/new\s+(\w+)\s*\(\s*\)\s*{/);
         if (!match) {
-            vscode.window.showInformationMessage('Please place the cursor on a "new XXX" statement.');
+            vscode.window.showInformationMessage('Please place the cursor on a "new XXX() {" statement.');
             return;
         }
 
-        const className = match[1]; // 獲取類別名稱 XXX
+        const className = match[1];
 
         try {
-            console.log(document.uri);
-            // 1️⃣ 執行 `executeDefinitionProvider` 查找 `XXX` 的定義位置
-            const documentUri = vscode.Uri.file('D:\\Project\\Test\\test.cs');
-            const definitions = await vscode.commands.executeCommand<vscode.Location[]>(
-                'vscode.executeDefinitionProvider',
-                documentUri,
-                position
+            // 使用 WorkspaceSymbolProvider 來查找類別
+            const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+                'vscode.executeWorkspaceSymbolProvider',
+                className
             );
 
-            if (!definitions || definitions.length === 0) {
-                vscode.window.showErrorMessage(`Definition of ${className} not found.`);
+            // 找到匹配的類別符號
+            const classSymbol = symbols?.find(s => 
+                s.kind === vscode.SymbolKind.Class && 
+                s.name === className
+            );
+
+            if (!classSymbol) {
+                vscode.window.showErrorMessage(`Class ${className} not found.`);
                 return;
             }
 
-            // 2️⃣ 取得 `XXX.cs` 的檔案 URI
-            const classDefinition = definitions[0]; // 取第一個定義
-            const classUri = classDefinition.uri;
-            vscode.window.showInformationMessage(`Class ${className} found at ${classUri.fsPath}`);
+            // 使用 DocumentSymbolProvider 來獲取類別成員
+            const classDocument = await vscode.workspace.openTextDocument(classSymbol.location.uri);
+            const memberSymbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+                'vscode.executeDocumentSymbolProvider',
+                classSymbol.location.uri
+            );
 
-            // 3️⃣ 讀取 `XXX.cs` 文件內容並解析成員
-            const members = await getClassMembers(classUri);
+            // 找到類別的符號
+            const classDocSymbol = memberSymbols?.find(s => 
+                s.kind === vscode.SymbolKind.Class && 
+                s.name === className
+            );
+
+            if (!classDocSymbol) {
+                vscode.window.showErrorMessage(`Unable to analyze class ${className}.`);
+                return;
+            }
+
+            // 收集所有屬性和欄位
+            const members = classDocSymbol.children
+                .filter(s => s.kind === vscode.SymbolKind.Property || s.kind === vscode.SymbolKind.Field)
+                .map(s => s.name);
+
             if (members.length === 0) {
                 vscode.window.showInformationMessage(`No members found in ${className}.`);
                 return;
             }
 
-            // 4️⃣ 產生初始化程式碼
             const initCode = generateInitializerCode(members);
 
             editor.edit(editBuilder => {
@@ -62,25 +82,43 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // 註冊 context menu 的條件
+    context.subscriptions.push(
+        vscode.languages.registerCodeActionsProvider('csharp', new InitializeMembersActionProvider(), {
+            providedCodeActionKinds: [vscode.CodeActionKind.RefactorInline]
+        })
+    );
+
     context.subscriptions.push(disposable);
 }
 
-// **函式：讀取類別檔案並解析屬性**
-async function getClassMembers(classUri: vscode.Uri): Promise<string[]> {
-    try {
-        const document = await vscode.workspace.openTextDocument(classUri);
-        const text = document.getText();
+// 修改 CodeActionProvider 類別中的 match 規則
+class InitializeMembersActionProvider implements vscode.CodeActionProvider {
+    public provideCodeActions(
+        document: vscode.TextDocument,
+        range: vscode.Range
+    ): vscode.CodeAction[] {
+        const lineText = document.lineAt(range.start.line).text;
+        const match = lineText.match(/new\s+(\w+)\s*\(\s*\)\s*{/);
 
-        // 使用正則表達式匹配屬性和欄位
-        const matches = [...text.matchAll(/\b(public|private|protected|internal)?\s+(\w+)\s+(\w+)\s*[{;=]/g)];
-        return matches.map(match => match[3]); // `match[3]` 是變數名稱
-    } catch (error) {
-        vscode.window.showErrorMessage('Error reading class members: ' + error);
-        return [];
+        if (!match) {
+            return [];
+        }
+
+        const action = new vscode.CodeAction(
+            'Initialize Members',
+            vscode.CodeActionKind.RefactorInline
+        );
+        action.command = {
+            command: 'csharp-member-initializer.initializeMembers',
+            title: 'Initialize Members',
+            tooltip: 'Initialize all members of the class'
+        };
+
+        return [action];
     }
 }
 
-// **函式：生成初始化程式碼**
 function generateInitializerCode(members: string[]): string {
     const memberInits = members.map(m => `            ${m} = `).join(',\n');
     return `\n${memberInits}\n        }`;
