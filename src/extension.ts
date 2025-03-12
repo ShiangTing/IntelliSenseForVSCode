@@ -13,8 +13,8 @@ export async function activate(context: vscode.ExtensionContext) {
         const position = editor.selection.active;   
 
         const lineText = document.lineAt(position.line).text;
-        // 修改 match 規則，使其匹配 new XXX(){, new XXX() {, new XXX () { 等格式
-        const match = lineText.match(/new\s+(\w+)\s*\(\s*\)\s*{/);
+        // 修改 match 規則，使其匹配 new XXX(), new XXX(), new XXX ()等格式
+        const match = lineText.match(/new\s+(\w+)\s*\(\s*\)/);
         if (!match) {
             vscode.window.showInformationMessage('Please place the cursor on a "new XXX() {" statement.');
             return;
@@ -100,7 +100,7 @@ class InitializeMembersActionProvider implements vscode.CodeActionProvider {
         range: vscode.Range
     ): vscode.CodeAction[] {
         const lineText = document.lineAt(range.start.line).text;
-        const match = lineText.match(/new\s+(\w+)\s*\(\s*\)\s*{/);
+        const match = lineText.match(/new\s+(\w+)\s*\(\s*\)/);
 
         if (!match) {
             return [];
@@ -121,7 +121,7 @@ class InitializeMembersActionProvider implements vscode.CodeActionProvider {
 }
 
 export function generateInitializerCode(members: string[]): string {
-    return members.map(m => `            ${m} = `).join(',\n');
+    return `{ ${members.map(m => `${m} = `).join(',\n')} };`;
 }
 
 export function deactivate() {} 
