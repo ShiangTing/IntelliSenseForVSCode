@@ -121,7 +121,9 @@ class InitializeMembersActionProvider implements vscode.CodeActionProvider {
 }
 
 export function generateInitializerCode(members: string[]): string {
-    return `{ ${members.map(m => `${m} = `).join(',\n')} };`;
+    return `{
+${members.map(m => `    ${m} = ,`).join('\n')}
+}`;
 }
 
 export function deactivate() {} 

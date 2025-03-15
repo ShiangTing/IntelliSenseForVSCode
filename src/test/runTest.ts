@@ -13,7 +13,11 @@ async function main() {
         await runTests({
             extensionDevelopmentPath,
             extensionTestsPath,
-            launchArgs: ['--disable-extensions']
+            // 启用 C# 扩展
+            launchArgs: [
+                '--install-extension', 'ms-dotnettools.csharp',
+                '--enable-proposed-api', 'ms-dotnettools.csharp'
+            ]
         });
     } catch (err) {
         console.error('Failed to run tests:', err);
@@ -21,4 +25,4 @@ async function main() {
     }
 }
 
-main(); 
+main();
